@@ -1,11 +1,14 @@
+from typing import List
 import cv2
 import numpy as np
 import math
 
 class OpenGaze:
     def __init__(self, height, width, radius: float, distance: float = 1.0):
+        self.zone_rate = math.sqrt(2)
         self.HEIGHT = height
         self.WIDTH = width
+        self.radius = radius
 
         self.img = None
         self.height = 0
@@ -13,48 +16,82 @@ class OpenGaze:
         self.channel = 0
         self.distance = distance
 
-        self.radius = radius
-        self.n_x_zone = self.countZone(width)
-        self.n_y_zone = self.countZone(height)
-        self.zone_rate = math.sqrt(2)
-        self.zone_boundary = [radius]
-        self.zone_distance = [radius]
+    def initZone(self, pivot: float, length: int, rate: float):
+        center = pivot * length
+        boundary_list = [center]
+        self.initLeftZone(center, rate, boundary_list)
+        self.initRightZone(center, length, rate, boundary_list)
+        boundary_list.sort()
+        n_zone = len(boundary_list)
+        distance_list = []
 
-    def countZone(self, length):
-        result = float(length) / float(self.radius)
-        n = int(result)
+        prev, curr = 0, 0
+        for i in range(1, n_zone):
+            prev = boundary_list[i - 1]
+            curr = boundary_list[i]
+            distance_list.append(curr - prev)
+        
+        if curr < length:
+            distance_list.append(length - curr)
 
-        if result > n:
-            return n + 1
+        boundary_list.pop(0)
+
+        if rate == 1.0:
+            if distance_list[-1] < self.radius:
+                distance_list[-2] += distance_list[-1]
+                distance_list.pop()
+                boundary_list.pop()
+
+            if distance_list[0] < self.radius:
+                distance_list[1] += distance_list[0]
+                distance_list.pop(0)
+                boundary_list.pop(0)
+                
+        return n_zone, boundary_list, distance_list
+    
+    def initLeftZone(self, boundary: float, rate: float, boundary_list: List[float]):
+        i = 0
+        while boundary > 0:
+            boundary -= self.radius * (rate**i)
+            if boundary > 0:
+                boundary_list.append(boundary)
+                i += 1
+            else:
+                boundary_list.append(0)
+    
+    def initRightZone(self, boundary: float, length: int, rate: float, boundary_list: List[float]):
+        i = 0
+        while boundary < length:
+            boundary += self.radius * (rate**i)
+            if boundary < length:
+                boundary_list.append(boundary)
+                i += 1
+            # else:
+            #     boundary_list.append(length - 1)
+    
+    def getZone(self, distance: float, is_width: bool) -> int:
+        is_neg = distance < 0
+        distance = math.fabs(distance)
+        if is_width:
+            for zone in range(self.w_zone_number):
+                if distance <= self.w_cum_distance_list[zone]:
+                    return zone
+            return self.w_zone_number - 1
         else:
-            return n
-
-    def getDistanceX(self, cx: float, x: float) -> float:
-        return math.sqrt((x - cx)**2)
+            for zone in range(self.h_zone_number):
+                if distance <= self.h_cum_distance_list[zone]:
+                    return zone
+            return self.h_zone_number - 1
     
-    def getZone(self, distance: float) -> int:  
-        n_boundary = len(self.zone_boundary)
-        zone = 0
-        r = self.zone_boundary[zone]
-        while distance > r:
-            zone += 1
-            if zone >= n_boundary:
-                zone_distance = self.radius*(self.zone_rate**zone)
-                self.zone_distance.append(zone_distance)
-                self.zone_boundary.append(r+zone_distance)           
-            r = self.zone_boundary[zone]
-        return zone
-    
-    def translate(self, x: float, y: float, zone: int) -> float:
+    def translate(self, v: float, zone: int, is_width: bool) -> float:
         if zone == 0:
             zone_boundary = 0
         else:
             zone_boundary = self.zone_boundary[zone-1]
 
-        # 將 x 轉換為所屬區域的 0 ~ 1
-        x = (x-zone_boundary)/self.zone_distance[zone]
-        y = (y-zone_boundary)/self.zone_distance[zone]
-        return x, y
+        # 將座標轉換為所屬區域的 0 ~ 1
+        v = (v-zone_boundary)/self.zone_distance[zone]
+        return v
 
     # 輸出全壓縮圖像，即沒有注視哪一處，全局均勻壓縮
     def basic(self, img: cv2.typing.MatLike):
@@ -82,8 +119,8 @@ class OpenGaze:
     def gaze(self, x: float = 0, y: float = 0): 
         weights = np.zeros((self.HEIGHT, self.WIDTH, 1), dtype=np.float32)
         values = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.float32)
-        xi = x*self.width
-        yi = y*self.height
+        w_i = x*self.width
+        h_i = y*self.height
         X = None
         Y = None
         count = 0
@@ -91,47 +128,37 @@ class OpenGaze:
         for h in range(self.height):
             # 將 h 從原始像素座標，轉換為 0 ~ 1 之間的數值
             hf = float(h) / float(self.height)
-            dst_h = math.floor(hf*self.HEIGHT)
+            # dst_h = math.floor(hf*self.HEIGHT)
 
             for w in range(self.width):
                 # 將 w 從原始像素座標，轉換為 0 ~ 1 之間的數值
                 wf = float(w) / float(self.width)
-                dst_w = math.floor(wf*self.WIDTH)
+                # dst_w = math.floor(wf*self.WIDTH)
                 color = self.img[h, w]
 
                 # 計算和注視點的距離
-                distance = self.getDistance(xi, yi, w, h)
-                zone = self.getZone(distance=distance)
+                w_distance = w_i - w
+                h_distance = h_i - h
 
-                d_rate = distance / self.radius
+                # 計算 z 分數, 以及縮放比例
+                w_zone = self.getZone(distance=w_distance)
+                h_zone = self.getZone(distance=h_distance)
+                w_translate = self.translate(w, w_zone)
+                h_translate = self.translate(w, h_zone)
+                
+                dst_w = math.floor((w_zone + w_translate) * self.radius)
+                dst_h = math.floor((h_zone + h_translate) * self.radius)
 
-                # 注視區域內，直接使用原本的像素
-                if d_rate < 1.0:
-                    # values[dst_h, dst_w] = color
+                if w_zone == 0 and h_zone == 0:
+                    values[dst_h, dst_w] = color
                     # values[dst_h, dst_w] = np.zeros((1, 1, self.channel), dtype=np.float32)
-                    values[dst_h, dst_w] = np.array([[[0, 0, 255]]])
-                    weights[dst_h, dst_w] = 1.0
-                    
-                    if X is None:
-                        X = dst_w
-                        Y = dst_h
-                        count = 1
-                    elif dst_w == X and dst_h == Y:
-                        count += 1
-                elif d_rate < 2.0:
-                    values[dst_h, dst_w] = np.array([[[255, 0, 0]]])
-                    weights[dst_h, dst_w] = 1.0
-                elif d_rate < 3.0:
-                    values[dst_h, dst_w] = np.array([[[0, 255, 0]]])
-                    weights[dst_h, dst_w] = 1.0
-                elif d_rate < 4.0:
-                    values[dst_h, dst_w] = np.array([[[0, 0, 255]]])
+                    # values[dst_h, dst_w] = np.array([[[0, 0, 255]]])
                     weights[dst_h, dst_w] = 1.0
                 else:
+                    distance = self.getDistance(w_i, h_i, h, w)
                     weight = self.getWeight(distance)
-
                     values[dst_h, dst_w] += color * weight
-                    weights[dst_h, dst_w] += weight
+                    weights[dst_h, dst_w] += weight  
 
         values /= weights        
         dst = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.uint8)
