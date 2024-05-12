@@ -1,0 +1,17 @@
+version: '3.9'
+
+volumes:
+  opengaze-store:
+
+services:
+  opengaze:
+    container_name: 'opengaze'
+    build:
+      context: .
+      dockerfile: ./containers/Dockerfile    
+    volumes:
+      - type: bind
+        source: ./opengaze
+        target: /home/opengaze
+        consistency: delegated
+    tty: true    
