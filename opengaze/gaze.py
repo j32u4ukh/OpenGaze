@@ -11,16 +11,28 @@ class OpenGaze:
         self.height = 0
         self.width = 0
         self.channel = 0
-        self.radius = radius
         self.distance = distance
+
+        self.radius = radius
+        self.n_x_zone = self.countZone(width)
+        self.n_y_zone = self.countZone(height)
         self.zone_rate = math.sqrt(2)
         self.zone_boundary = [radius]
         self.zone_distance = [radius]
 
+    def countZone(self, length):
+        result = float(length) / float(self.radius)
+        n = int(result)
+
+        if result > n:
+            return n + 1
+        else:
+            return n
+
     def getDistanceX(self, cx: float, x: float) -> float:
         return math.sqrt((x - cx)**2)
     
-    def getZoneX(self, distance: float) -> int:  
+    def getZone(self, distance: float) -> int:  
         n_boundary = len(self.zone_boundary)
         zone = 0
         r = self.zone_boundary[zone]
@@ -33,7 +45,7 @@ class OpenGaze:
             r = self.zone_boundary[zone]
         return zone
     
-    def translate(self, x: float, zone: int) -> float:
+    def translate(self, x: float, y: float, zone: int) -> float:
         if zone == 0:
             zone_boundary = 0
         else:
@@ -41,7 +53,8 @@ class OpenGaze:
 
         # 將 x 轉換為所屬區域的 0 ~ 1
         x = (x-zone_boundary)/self.zone_distance[zone]
-        return x
+        y = (y-zone_boundary)/self.zone_distance[zone]
+        return x, y
 
     # 輸出全壓縮圖像，即沒有注視哪一處，全局均勻壓縮
     def basic(self, img: cv2.typing.MatLike):
@@ -50,13 +63,14 @@ class OpenGaze:
         shape = img.shape
         self.height = shape[0]
         self.width = shape[1]
-        size = float(min(self.height, self.width))
         self.channel = shape[2]
         basic_img = cv2.resize(img, (self.WIDTH, self.HEIGHT), interpolation=cv2.INTER_CUBIC)
         return basic_img
     
     def setRadius(self, radius: float):
         self.radius = radius
+        self.zone_boundary = [radius]
+        self.zone_distance = [radius]
     
     def getDistance(self, cx: float = 0, cy: float = 0, x: float = 0, y: float = 0) -> float:
         distance = math.sqrt((x - cx)**2 + (y - cy)**2)
@@ -68,8 +82,8 @@ class OpenGaze:
     def gaze(self, x: float = 0, y: float = 0): 
         weights = np.zeros((self.HEIGHT, self.WIDTH, 1), dtype=np.float32)
         values = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.float32)
-        xi = math.floor(x*self.width)
-        yi = math.floor(y*self.height)
+        xi = x*self.width
+        yi = y*self.height
         X = None
         Y = None
         count = 0
@@ -85,8 +99,10 @@ class OpenGaze:
                 dst_w = math.floor(wf*self.WIDTH)
                 color = self.img[h, w]
 
-                # 計算像素距離平方
+                # 計算和注視點的距離
                 distance = self.getDistance(xi, yi, w, h)
+                zone = self.getZone(distance=distance)
+
                 d_rate = distance / self.radius
 
                 # 注視區域內，直接使用原本的像素
