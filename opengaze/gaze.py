@@ -26,7 +26,7 @@ class DstSrc:
 
 class OpenGaze:
     def __init__(self, height, width, radius: float, distance: float = 1.0):
-        self.zone_rate = math.sqrt(2)
+        self.zone_rate = 1.5
         self.HEIGHT = height
         self.WIDTH = width
         self.radius = radius
@@ -121,7 +121,7 @@ class OpenGaze:
         # 若 zone 不為 0, 將座標根據所屬區塊的初始座標值做校正
         if zone != 0:
             pivot += boundary_list[zone - 1].dst
-        return pivot
+        return math.floor(pivot)
 
     # 輸出全壓縮圖像，即沒有注視哪一處，全局均勻壓縮
     def basic(self, img: cv2.typing.MatLike):
@@ -135,33 +135,35 @@ class OpenGaze:
         return basic_img
 
     def gaze(self, x: float = 0, y: float = 0): 
-        weights = np.zeros((self.HEIGHT, self.WIDTH, 1), dtype=np.float32)
+        weights = np.ones((self.HEIGHT, self.WIDTH, 1), dtype=np.float32)
         values = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.float32)
+        dst = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.uint8)
 
         w_zone_number, w_boundary_list, w_distance_list = self.initZone(x, self.WIDTH, self.width, self.zone_rate)
         h_zone_number, h_boundary_list, h_distance_list = self.initZone(y, self.HEIGHT, self.height, self.zone_rate)
 
-        X = None
-        Y = None
+        X, Y = None, None
         count = 0
+        dst_h, dst_w = 0, 0
 
-        for h in range(self.height):
-            dst_h = self.translate(h, h_zone_number, h_boundary_list, h_distance_list)
-            for w in range(self.width):
-                dst_w = self.translate(w, w_zone_number, w_boundary_list, w_distance_list)
+        try:
+            for h in range(self.height):
+                dst_h = self.translate(h, h_zone_number, h_boundary_list, h_distance_list)
+                for w in range(self.width):
+                    dst_w = self.translate(w, w_zone_number, w_boundary_list, w_distance_list)
 
-                color = self.img[h, w]
-                values[dst_h, dst_w] += color
-                weights[dst_h, dst_w] += 1
-                     
+                    color = self.img[h, w]
+                    values[dst_h, dst_w] += color
+                    weights[dst_h, dst_w] += 1
 
-        values /= weights        
-        dst = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.uint8)
-        print(f"count: {count}")
-     
-        for h in range(self.HEIGHT):
-            for w in range(self.WIDTH):
-                color = values[h, w].reshape((1, 1, self.channel))
-                dst[h, w] = np.round(color).astype(np.uint8)
+            values /= weights
+        
+            for h in range(self.HEIGHT):
+                for w in range(self.WIDTH):
+                    color = values[h, w].reshape((1, 1, self.channel))
+                    dst[h, w] = np.round(color).astype(np.uint8)
+        except Exception as e:
+            print(e)
+            print(f"dst_h: {dst_h}, dst_w: {dst_w}. values: {values.shape}, weights: {weights.shape}")
 
         return dst
