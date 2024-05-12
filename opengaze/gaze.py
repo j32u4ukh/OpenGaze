@@ -2,6 +2,27 @@ from typing import List
 import cv2
 import numpy as np
 import math
+from functools import total_ordering
+
+# total_ordering: 使得我可以只定義 __eq__ 和 __gt__ 就可進行完整的比較
+# https://python3-cookbook.readthedocs.io/zh_CN/latest/c08/p24_making_classes_support_comparison_operations.html
+@total_ordering
+class DstSrc:
+    def __init__(self, dst, src):
+        self.dst = dst
+        self.src = src
+
+    def __eq__(self, other):
+        return self.dst == other.dst
+
+    def __gt__(self, other):
+        return self.dst > other.dst
+    
+    def __repr__(self) -> str:
+        return f"({self.dst}, {self.src})"
+    
+    __str__ = __repr__
+
 
 class OpenGaze:
     def __init__(self, height, width, radius: float, distance: float = 1.0):
@@ -16,12 +37,17 @@ class OpenGaze:
         self.channel = 0
         self.distance = distance
 
-    def initZone(self, pivot: float, length: int, rate: float):
-        center = pivot * length
-        boundary_list = [center]
-        self.initLeftZone(center, rate, boundary_list)
-        self.initRightZone(center, length, rate, boundary_list)
-        boundary_list.sort()
+    def initZone(self, pivot: float, dst_length: int, src_length: int, rate: float):
+        def sort_boundry(boundary):
+            return boundary[0]
+        
+        dst_center = pivot * dst_length
+        src_center = pivot * src_length
+        boundary_list = [DstSrc(dst_center, src_center)]
+        self.initLeftZone(dst_center, src_center, rate, boundary_list)
+        self.initRightZone(dst_center, src_center, dst_length, rate, boundary_list)
+
+        boundary_list.sort()      
         n_zone = len(boundary_list)
         distance_list = []
 
@@ -29,42 +55,47 @@ class OpenGaze:
         for i in range(1, n_zone):
             prev = boundary_list[i - 1]
             curr = boundary_list[i]
-            distance_list.append(curr - prev)
+            dst_distance = curr.dst - prev.dst
+            src_distance = curr.src - prev.src
+            distance_list.append(DstSrc(dst_distance, src_distance))
         
-        if curr < length:
-            distance_list.append(length - curr)
+        if curr.dst < dst_length:
+            distance_list.append(DstSrc(dst_length - curr.dst, src_length - curr.src))
 
         boundary_list.pop(0)
 
-        if rate == 1.0:
-            if distance_list[-1] < self.radius:
-                distance_list[-2] += distance_list[-1]
-                distance_list.pop()
-                boundary_list.pop()
+        if distance_list[-1].dst < self.radius:
+            distance_list[-2].dst += distance_list[-1].dst
+            distance_list[-2].src += distance_list[-1].src
+            distance_list.pop()
+            boundary_list.pop()
 
-            if distance_list[0] < self.radius:
-                distance_list[1] += distance_list[0]
-                distance_list.pop(0)
-                boundary_list.pop(0)
+        if distance_list[0].dst < self.radius:
+            distance_list[1].dst += distance_list[0].dst
+            distance_list[1].src += distance_list[0].src
+            distance_list.pop(0)
+            boundary_list.pop(0)
                 
         return n_zone, boundary_list, distance_list
     
-    def initLeftZone(self, boundary: float, rate: float, boundary_list: List[float]):
+    def initLeftZone(self, dst_boundary: float, src_boundary: float, rate: float, boundary_list: List[float]):
         i = 0
-        while boundary > 0:
-            boundary -= self.radius * (rate**i)
-            if boundary > 0:
-                boundary_list.append(boundary)
+        while dst_boundary > 0:
+            dst_boundary -= self.radius
+            src_boundary -= self.radius * (rate**i)
+            if dst_boundary > 0:
+                boundary_list.append(DstSrc(dst_boundary, src_boundary))
                 i += 1
             else:
-                boundary_list.append(0)
+                boundary_list.append(DstSrc(0, 0))
     
-    def initRightZone(self, boundary: float, length: int, rate: float, boundary_list: List[float]):
+    def initRightZone(self, dst_boundary: float, src_boundary: float, length: int, rate: float, boundary_list: List[float]):
         i = 0
-        while boundary < length:
-            boundary += self.radius * (rate**i)
-            if boundary < length:
-                boundary_list.append(boundary)
+        while dst_boundary < length:
+            dst_boundary += self.radius
+            src_boundary += self.radius * (rate**i)
+            if dst_boundary < length:
+                boundary_list.append(DstSrc(dst_boundary, src_boundary))
                 i += 1
             # else:
             #     boundary_list.append(length - 1)

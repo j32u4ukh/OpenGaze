@@ -30,9 +30,9 @@ print(f"basic_img.shape: {basic_img.shape}")
 
 # dst = og.gaze(0.5, 0.2)
 # print(f"dst.shape: {dst.shape}")
-w_n_zone, w_distance_list, w_cum_distance_list = og.initZone(0.5, width, zone_rate)
+w_n_zone, w_distance_list, w_cum_distance_list = og.initZone(0.5, 400, 700, zone_rate)
 print(f"w_n_zone: {w_n_zone}\nw_distance_list: {w_distance_list}\nw_cum_distance_list: {w_cum_distance_list}")
-h_n_zone, h_distance_list, h_cum_distance_list = og.initZone(0.5, height, zone_rate)
+h_n_zone, h_distance_list, h_cum_distance_list = og.initZone(0.5, 200, 300, zone_rate)
 print(f"h_n_zone: {h_n_zone}\nh_distance_list: {h_distance_list}\nh_cum_distance_list: {h_cum_distance_list}")
 
 # cv2.imwrite("./data/gaze.png", dst)
