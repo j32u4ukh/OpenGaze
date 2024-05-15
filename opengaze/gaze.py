@@ -27,8 +27,8 @@ class DstSrc:
 class OpenGaze:
     def __init__(self, height, width, radius: float, distance: float = 1.0):
         self.zone_rate = 1.5
-        self.HEIGHT = height
-        self.WIDTH = width
+        self.dst_height = height
+        self.dst_width = width
         self.radius = radius
 
         self.img = None
@@ -36,6 +36,26 @@ class OpenGaze:
         self.width = 0
         self.channel = 0
         self.distance = distance
+
+    def initDistanceZone(self, rate: float):
+        # 取 dst 的對角線(最長的長度)
+        diagonal_length = math.sqrt(self.dst_height**2 + self.dst_width**2)
+        # print(f"diagonal_length: {diagonal_length}")
+        boundary_list = []
+        distance_list = []
+        dst_boundary, src_boundary = 0, 0
+
+        zone = 0
+        while dst_boundary < diagonal_length:
+            dst_boundary += self.radius
+            distance = self.radius * (rate**zone)
+            src_boundary += distance
+            # if dst_boundary < diagonal_length:
+            boundary_list.append(DstSrc(dst_boundary, src_boundary))
+            distance_list.append(DstSrc(self.radius, distance))
+            zone += 1
+        
+        return zone, boundary_list, distance_list
 
     def initZone(self, pivot: float, dst_length: int, src_length: int, rate: float):        
         dst_center = pivot * dst_length
@@ -122,6 +142,28 @@ class OpenGaze:
         if zone != 0:
             pivot += boundary_list[zone - 1].dst
         return math.floor(pivot)
+    
+    def translateCircle(self, src_pivot: int, n_zone: int, boundary_list: List[DstSrc], distance_list: List[DstSrc]) -> int:
+        zone = 0
+        not_found = True
+        for zone in range(n_zone):
+            if src_pivot <= boundary_list[zone].src:
+                not_found = False
+                break
+        if not_found:
+            zone = n_zone
+
+        pivot = src_pivot
+        # 若 zone 不為 0, 將座標根據所屬區塊的初始座標值做校正
+        if zone != 0:
+            pivot -= boundary_list[zone - 1].src
+        # 根據座標根據所屬區塊的長度, 將長度做校正
+        pivot = float(pivot) / distance_list[zone].src
+        pivot = pivot * distance_list[zone].dst
+        # 若 zone 不為 0, 將座標根據所屬區塊的初始座標值做校正
+        if zone != 0:
+            pivot += boundary_list[zone - 1].dst
+        return math.floor(pivot)
 
     # 輸出全壓縮圖像，即沒有注視哪一處，全局均勻壓縮
     def basic(self, img: cv2.typing.MatLike):
@@ -131,16 +173,16 @@ class OpenGaze:
         self.height = shape[0]
         self.width = shape[1]
         self.channel = shape[2]
-        basic_img = cv2.resize(img, (self.WIDTH, self.HEIGHT), interpolation=cv2.INTER_CUBIC)
+        basic_img = cv2.resize(img, (self.dst_width, self.dst_height), interpolation=cv2.INTER_CUBIC)
         return basic_img
 
     def gaze(self, x: float = 0, y: float = 0): 
-        weights = np.ones((self.HEIGHT, self.WIDTH, 1), dtype=np.float32)
-        values = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.float32)
-        dst = np.zeros((self.HEIGHT, self.WIDTH, self.channel), dtype=np.uint8)
+        weights = np.ones((self.dst_height, self.dst_width, 1), dtype=np.float32)
+        values = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.float32)
+        dst = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.uint8)
 
-        w_zone_number, w_boundary_list, w_distance_list = self.initZone(x, self.WIDTH, self.width, self.zone_rate)
-        h_zone_number, h_boundary_list, h_distance_list = self.initZone(y, self.HEIGHT, self.height, self.zone_rate)
+        w_zone_number, w_boundary_list, w_distance_list = self.initZone(x, self.dst_width, self.width, self.zone_rate)
+        h_zone_number, h_boundary_list, h_distance_list = self.initZone(y, self.dst_height, self.height, self.zone_rate)
 
         X, Y = None, None
         count = 0
@@ -158,8 +200,8 @@ class OpenGaze:
 
             values /= weights
         
-            for h in range(self.HEIGHT):
-                for w in range(self.WIDTH):
+            for h in range(self.dst_height):
+                for w in range(self.dst_width):
                     color = values[h, w].reshape((1, 1, self.channel))
                     dst[h, w] = np.round(color).astype(np.uint8)
         except Exception as e:
