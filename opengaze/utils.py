@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 
 class Point:
@@ -10,7 +11,8 @@ class Point:
         return f"Point(x: {self.x}, y: {self.y})"
     
     __str__ = __repr__
-        
+
+
 class Vector:
     def __init__(self, p1: Point, p2: Point):
         self.x = p2.x - p1.x
@@ -86,3 +88,17 @@ def findRatio(S, a, n, tolerance=1e-6):
 
     # 返回逼近的公比 r
     return (low + high) / 2
+
+
+def gaussian_weight(distance, sigma=1):
+    """
+    Calculate the weight of a pixel based on its distance from the center using a Gaussian function.
+
+    Parameters:
+    - distance: Distance of the pixel from the center.
+    - sigma: Standard deviation of the Gaussian function.
+
+    Returns:
+    - Weight of the pixel.
+    """
+    return np.exp(-0.5 * (distance / sigma) ** 2)

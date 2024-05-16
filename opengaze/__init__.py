@@ -18,7 +18,7 @@ src_width = shape[1]
 height = int(src_height/3)
 width = int(src_width/3)
 
-og = OpenGaze(height=height, width=width, radius=40, distance=1)
+og = OpenGaze(height=height, width=width, radius=40, distance=1e-7)
 # diagonal = math.sqrt(src_height**2 + src_width**2)
 # zone, boundary_list, distance_list = og.initDistanceZone(src_diagonal=diagonal)
 # print(f"zone: {zone}, zone_rate: {og.zone_rate}")

@@ -4,7 +4,7 @@ import numpy as np
 import math
 from functools import total_ordering
 
-from utils import Point, Vector, computeDistance, findRatio, getUnitVector, modifyPoint
+from utils import Point, Vector, computeDistance, findRatio, gaussian_weight, getUnitVector, modifyPoint
 
 # total_ordering: 使得我可以只定義 __eq__ 和 __gt__ 就可進行完整的比較
 # https://python3-cookbook.readthedocs.io/zh_CN/latest/c08/p24_making_classes_support_comparison_operations.html
@@ -166,6 +166,7 @@ class OpenGaze:
                 distance -= boundary_list[zone - 1].src
 
             # weight = 1 / (distance + self.distance)
+            # weight = gaussian_weight(distance)
             weight = 1
 
             # 根據座標根據所屬區塊的長度, 將長度做校正
