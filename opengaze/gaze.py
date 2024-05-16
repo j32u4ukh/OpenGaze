@@ -42,8 +42,9 @@ class OpenGaze:
         self.channel = 0
         self.distance = distance
 
-    def initCircleZone(self, src_diagonal: float):        
-        self.zone_rate = findRatio(S=src_diagonal, a=self.radius, n=19)
+    def initCircleZone(self, src_diagonal: float, dst_diagonal: float):
+        n_zone = 10
+        self.zone_rate = findRatio(S=src_diagonal, a=self.radius, n=n_zone)
         boundary_list = []
         distance_list = []
         dst_boundary, src_boundary = 0, 0
@@ -53,10 +54,14 @@ class OpenGaze:
             dst_boundary += self.radius
             distance = self.radius * (self.zone_rate**zone)
             src_boundary += distance
-            # if dst_boundary < diagonal_length:
             boundary_list.append(DstSrc(dst_boundary, src_boundary))
             distance_list.append(DstSrc(self.radius, distance))
+            if zone == n_zone - 2:
+                break
             zone += 1
+
+        boundary_list.append(DstSrc(dst_diagonal, src_diagonal))
+        distance_list.append(DstSrc(dst_diagonal - dst_boundary, src_diagonal - src_boundary))
         
         return zone, boundary_list, distance_list
 
@@ -235,7 +240,8 @@ class OpenGaze:
         dst = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.uint8)
 
         src_diagonal = math.sqrt(self.height**2 + self.width**2)
-        zone, boundary_list, distance_list = self.initCircleZone(src_diagonal)
+        dst_diagonal = math.sqrt(self.dst_height**2 + self.dst_width**2)
+        zone, boundary_list, distance_list = self.initCircleZone(src_diagonal, dst_diagonal)
 
         W, H = None, None
         count = 0
