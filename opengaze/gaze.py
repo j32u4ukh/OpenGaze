@@ -43,7 +43,7 @@ class OpenGaze:
         self.distance = distance
 
     def initCircleZone(self, src_diagonal: float, dst_diagonal: float):
-        n_zone = 10
+        n_zone = 13
         self.zone_rate = findRatio(S=src_diagonal, a=self.radius, n=n_zone)
         boundary_list = []
         distance_list = []
