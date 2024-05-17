@@ -15,10 +15,12 @@ shape = img.shape
 print(f"img.shape: {img.shape}")
 src_height = shape[0]
 src_width = shape[1]
+
 height = int(src_height/3)
 width = int(src_width/3)
-
-og = OpenGaze(height=height, width=width, radius=40, distance=1e-7)
+radius = 30
+n_zone = 16
+og = OpenGaze(height=height, width=width, radius=radius, n_zone=n_zone)
 
 basic_img = og.basic(img)
 print(f"basic_img.shape: {basic_img.shape}")
@@ -26,18 +28,7 @@ print(f"basic_img.shape: {basic_img.shape}")
 dst = og.gazeCircle(0.5, 0.5)
 print(f"dst.shape: {dst.shape}")
 
-cv2.imwrite("./data/gaze.png", dst)
+cv2.imwrite(f"./data/gaze-({height}, {width})-r({radius})-{n_zone}.png", dst)
 # cv2.imshow("PON", dst)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
-
-# vector = Vector(Point(0, 0), Point(1920, 1080))
-# length = vector.getLength()
-# print(f"length: {length}")
-
-# values = np.ones((5, 5, 3), dtype=np.float32)
-# weights = np.zeros((5, 5, 1), dtype=np.float32)
-# results = np.maximum(weights, 1)
-# print(results)
-# values /= results
-# print(values)

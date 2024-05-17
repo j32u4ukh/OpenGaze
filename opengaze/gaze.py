@@ -27,48 +27,50 @@ class DstSrc:
 
 
 class OpenGaze:
-    def __init__(self, height, width, radius: float, distance: float = 1.0):
+    def __init__(self, height, width, radius: float, n_zone: int):
         self.dst_height = height
         self.dst_width = width
         self.radius = radius
-        self.zone_rate = math.sqrt(2)
+        self.n_zone = n_zone
+
         # 取 dst 的對角線(最長的長度)
-        self.diagonal = math.sqrt(self.dst_height**2 + self.dst_width**2)
-        print(f"diagonal: {self.diagonal}")
+        self.dst_diagonal = math.sqrt(self.dst_height**2 + self.dst_width**2)
+        self.dst_rate = findRatio(S=self.dst_diagonal, a=self.radius, n=self.n_zone)
+        print(f"diagonal: {self.dst_diagonal}, dst_rate: {self.dst_rate}")
+        self.use_dst_ratio = False
 
         self.img = None
         self.height = 0
         self.width = 0
         self.channel = 0
-        self.distance = distance
+        self.distance = 1e-7
 
-    def initCircleZone(self, src_diagonal: float, dst_diagonal: float):
-        n_zone = 13
-        self.zone_rate = findRatio(S=src_diagonal, a=self.radius, n=n_zone)
+    def useDstRatio(self, use: bool):
+        self.use_dst_ratio = use
+
+    def initCircleZone(self, src_diagonal: float):
+        dst_rate = self.dst_rate if self.use_dst_ratio else 1
+        src_rate = findRatio(S=src_diagonal, a=self.radius, n=self.n_zone)
         boundary_list = []
         distance_list = []
         dst_boundary, src_boundary = 0, 0
-
-        zone = 0
-        while dst_boundary < self.diagonal:
-            dst_boundary += self.radius
-            distance = self.radius * (self.zone_rate**zone)
-            src_boundary += distance
+        n_zone = self.n_zone - 1
+        for zone in range(n_zone):
+            dst_distance = self.radius * (dst_rate**zone)
+            src_distance = self.radius * (src_rate**zone)
+            dst_boundary += dst_distance
+            src_boundary += src_distance
             boundary_list.append(DstSrc(dst_boundary, src_boundary))
-            distance_list.append(DstSrc(self.radius, distance))
-            if zone == n_zone - 2:
-                break
-            zone += 1
-
-        boundary_list.append(DstSrc(dst_diagonal, src_diagonal))
-        distance_list.append(DstSrc(dst_diagonal - dst_boundary, src_diagonal - src_boundary))
+            distance_list.append(DstSrc(dst_distance, src_distance))
+            
+        boundary_list.append(DstSrc(self.dst_diagonal, src_diagonal))
+        distance_list.append(DstSrc(self.dst_diagonal - dst_boundary, src_diagonal - src_boundary))
         
-        return zone, boundary_list, distance_list
+        return self.n_zone, boundary_list, distance_list
     
     # 將 src 座標轉換成 dst 座標
-    # boundary_list: [(50.0, 100.0), (100.0, 150.0), (150.0, 200.0)]
-    # distance_list: [(50.0, 100.0), (50.0, 50.0), (50.0, 50.0), (50.0, 100.0)]
-    def translateCircle(self, src_center: Point, dst_center: Point, src_pivot: Point, n_zone: int, boundary_list: List[DstSrc], distance_list: List[DstSrc]) -> tuple[Point, float]:
+    def translateCircle(self, src_center: Point, dst_center: Point, src_pivot: Point, n_zone: int, 
+                        boundary_list: List[DstSrc], distance_list: List[DstSrc]) -> tuple[Point, float]:
         try:
             vector = Vector(src_center, src_pivot)
             distance = vector.getLength()
@@ -126,9 +128,7 @@ class OpenGaze:
         dst = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.uint8)
 
         src_diagonal = math.sqrt(self.height**2 + self.width**2)
-        dst_diagonal = math.sqrt(self.dst_height**2 + self.dst_width**2)
-        zone, boundary_list, distance_list = self.initCircleZone(src_diagonal, dst_diagonal)
-
+        zone, boundary_list, distance_list = self.initCircleZone(src_diagonal)
         dst_h, dst_w = 0, 0
 
         try:
