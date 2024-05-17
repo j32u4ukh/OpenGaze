@@ -97,8 +97,8 @@ class OpenGaze:
             dst_h = max(0, min(int(round(point.y)), self.dst_height - 1))
             pixel = Point(dst_w, dst_h)
             w_distance = computeDistance(point, pixel)
-            # weight = 1 / w_distance
-            weight = gaussian_weight(w_distance)
+            weight = 1 / (w_distance + self.distance)
+            # weight = gaussian_weight(w_distance)
 
             return pixel, weight
         except Exception as e:
