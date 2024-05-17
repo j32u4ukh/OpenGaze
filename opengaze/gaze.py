@@ -96,8 +96,9 @@ class OpenGaze:
             dst_w = max(0, min(int(round(point.x)), self.dst_width - 1))
             dst_h = max(0, min(int(round(point.y)), self.dst_height - 1))
             pixel = Point(dst_w, dst_h)
-            w_distance = computeDistance(point, pixel) + 1
-            weight = 1 / w_distance
+            w_distance = computeDistance(point, pixel)
+            # weight = 1 / w_distance
+            weight = gaussian_weight(w_distance)
 
             return pixel, weight
         except Exception as e:
@@ -120,7 +121,7 @@ class OpenGaze:
         dst_center = Point(self.dst_width * x, self.dst_height * y)
         print(f"src_center: {src_center}, dst_center: {dst_center}")
 
-        weights = np.ones((self.dst_height, self.dst_width, 1), dtype=np.float32)
+        weights = np.zeros((self.dst_height, self.dst_width, 1), dtype=np.float32)
         values = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.float32)
         dst = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.uint8)
 
@@ -128,8 +129,6 @@ class OpenGaze:
         dst_diagonal = math.sqrt(self.dst_height**2 + self.dst_width**2)
         zone, boundary_list, distance_list = self.initCircleZone(src_diagonal, dst_diagonal)
 
-        W, H = None, None
-        count = 0
         dst_h, dst_w = 0, 0
 
         try:
@@ -148,12 +147,14 @@ class OpenGaze:
                     values[dst_h, dst_w] += color * weight
                     weights[dst_h, dst_w] += weight
 
-            values /= weights
-        
+            # values /= weights
+            values /= np.maximum(weights, 1)
+
             for h in range(self.dst_height):
                 for w in range(self.dst_width):
                     color = values[h, w].reshape((1, 1, self.channel))
-                    dst[h, w] = np.round(color).astype(np.uint8)
+                    # dst[h, w] = np.round(color).astype(np.uint8)
+                    dst[h, w] = np.clip(np.round(color), 0, 255).astype(np.uint8)
         except Exception as e:
             print(e)
             print(f"dst_h: {dst_h}, dst_w: {dst_w}. values: {values.shape}, weights: {weights.shape}")

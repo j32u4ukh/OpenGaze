@@ -34,3 +34,10 @@ cv2.imwrite("./data/gaze.png", dst)
 # vector = Vector(Point(0, 0), Point(1920, 1080))
 # length = vector.getLength()
 # print(f"length: {length}")
+
+# values = np.ones((5, 5, 3), dtype=np.float32)
+# weights = np.zeros((5, 5, 1), dtype=np.float32)
+# results = np.maximum(weights, 1)
+# print(results)
+# values /= results
+# print(values)
