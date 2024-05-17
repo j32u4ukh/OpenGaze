@@ -19,11 +19,6 @@ height = int(src_height/3)
 width = int(src_width/3)
 
 og = OpenGaze(height=height, width=width, radius=40, distance=1e-7)
-# diagonal = math.sqrt(src_height**2 + src_width**2)
-# zone, boundary_list, distance_list = og.initDistanceZone(src_diagonal=diagonal)
-# print(f"zone: {zone}, zone_rate: {og.zone_rate}")
-# print(f"boundary_list({len(boundary_list)}): {boundary_list}")
-# print(f"distance_list({len(distance_list)}): {distance_list}")
 
 basic_img = og.basic(img)
 print(f"basic_img.shape: {basic_img.shape}")
