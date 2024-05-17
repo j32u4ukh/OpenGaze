@@ -145,7 +145,7 @@ class OpenGaze:
                     # if (45 <= w and w <= 50) and (45 <= h and h <= 50):
                     #     print(f"pivot: {pivot}, dst_point: {dst_point}, color: {color}")
 
-                    values[dst_h, dst_w] += color
+                    values[dst_h, dst_w] += color * weight
                     weights[dst_h, dst_w] += weight
 
             values /= weights
