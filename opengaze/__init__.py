@@ -1,9 +1,6 @@
-import math
 import cv2
-import numpy as np
 
 from gaze import OpenGaze
-from utils import Point, Vector, computeSn, findOvalIntersection, findOvalPointByRadius, findRadius, findRatio, getOvalDistance
 
 """
 OpenCV 的順序為 (width, height), numpy 呈現的順序為 (height, width, 3)
@@ -25,8 +22,6 @@ og = OpenGaze(height=height, width=width, radius=radius, n_zone=n_zone)
 basic_img = og.basic(img)
 print(f"basic_img.shape: {basic_img.shape}")
 
-n_zone, a_list, b_list, boundary_list, distance_list = og.initOvalZone()
-
 # x_float = 0.5
 # y_float = 0.5
 # src_center = Point(og.src_width * x_float, og.src_height * y_float)
@@ -40,7 +35,9 @@ n_zone, a_list, b_list, boundary_list, distance_list = og.initOvalZone()
 dst = og.gazeOval(0.5, 0.5)
 print(f"dst.shape: {dst.shape}")
 
-cv2.imwrite(f"./data/gazeoval-({height}, {width})-{n_zone}.png", dst)
+file_name = f"./data/gazeoval-({height}, {width})-{n_zone}.png"
+cv2.imwrite(file_name, dst)
+print(f"Save as {file_name}")
 # cv2.imshow("PON", dst)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()

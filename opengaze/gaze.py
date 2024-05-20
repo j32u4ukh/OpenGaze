@@ -4,7 +4,10 @@ import numpy as np
 import math
 from functools import total_ordering
 
-from utils import Point, Vector, computeDistance, findOvalIntersection, findOvalPointByRadius, findRadius, findRatio, gaussian_weight, getOvalDistance, getOvalPointDistance, getUnitVector, modifyPoint
+from coordinate import Point, Vector
+from oval import Oval, findOvalIntersection, getOvalPointDistance
+from utils import findRadius, findRatio
+
 
 # total_ordering: 使得我可以只定義 __eq__ 和 __gt__ 就可進行完整的比較
 # https://python3-cookbook.readthedocs.io/zh_CN/latest/c08/p24_making_classes_support_comparison_operations.html
@@ -40,9 +43,9 @@ class OpenGaze:
         self.use_dst_ratio = False
 
         # 預設劃分成三個區段
-        root_rate = math.sqrt(self.n_zone)
-        self.dst_a = self.dst_width / root_rate
-        self.dst_b = self.dst_height / root_rate
+        self.root_rate = math.sqrt(self.n_zone)
+        self.dst_a = self.dst_width / self.root_rate
+        self.dst_b = self.dst_height / self.root_rate
         self.src_a = None
         self.src_b = None
 
@@ -77,16 +80,17 @@ class OpenGaze:
         
         return self.n_zone, boundary_list, distance_list
 
-    def initOvalZone(self):
+    def initOvalZone(self, dst_center: Point, src_center: Point):
         self.src_a = self.src_width / self.n_zone
         self.src_b = self.src_height / self.n_zone
 
-        a_list = [DstSrc(self.dst_a, self.src_a)]
-        b_list = [DstSrc(self.dst_b, self.src_b)]
         boundary_list = [DstSrc(1, 1)]
         distance_list = [DstSrc(1, 1)]
+        dst_ovals = [Oval(center=dst_center, a=self.dst_a, b=self.dst_b)]
+        src_ovals = [Oval(center=src_center, a=self.src_a, b=self.src_b)]
         dst_boundary, src_boundary = 0, 0
         n_zone = self.n_zone
+        
         for zone in range(1, n_zone):
             dst_boundary = zone + 1
             src_boundary = dst_boundary**2
@@ -102,11 +106,11 @@ class OpenGaze:
             src_a = self.src_a * src_rate
             src_b = self.src_b * src_rate
 
-            a_list.append(DstSrc(dst_a, src_a))
-            b_list.append(DstSrc(dst_b, src_b))
+            dst_ovals.append(Oval(center=dst_center, a=dst_a, b=dst_b))
+            src_ovals.append(Oval(center=src_center, a=src_a, b=src_b))
         
         self.n_zone = len(boundary_list)
-        return self.n_zone, a_list, b_list, boundary_list, distance_list
+        return self.n_zone, boundary_list, dst_ovals, src_ovals
     
     # 將 src 座標轉換成 dst 座標
     def translateCircle(self, src_center: Point, dst_center: Point, src_pivot: Point, n_zone: int, 
@@ -132,13 +136,13 @@ class OpenGaze:
             if zone != 0:
                 distance += boundary_list[zone - 1].dst
             
-            vector = getUnitVector(vector)
-            vector.multiply(distance)
-            point = modifyPoint(dst_center, vector)
+            vector = vector.norm()
+            vector.multiply(distance)            
+            point = dst_center.translate(vector)
             dst_w = max(0, min(int(round(point.x)), self.dst_width - 1))
             dst_h = max(0, min(int(round(point.y)), self.dst_height - 1))
             pixel = Point(dst_w, dst_h)
-            w_distance = computeDistance(point, pixel)
+            w_distance = point.computeDistance(pixel)
             weight = 1 / (w_distance + self.distance)
             # weight = gaussian_weight(w_distance)
 
@@ -149,39 +153,39 @@ class OpenGaze:
     
     # 將 src 座標轉換成 dst 座標
     def translateOval(self, src_center: Point, dst_center: Point, src_pivot: Point, n_zone: int, 
-                      a_list: List[DstSrc], b_list: List[DstSrc], 
-                      boundary_list: List[DstSrc]) -> tuple[Point, float]:
+                      boundary_list: List[DstSrc], dst_ovals: List[Oval], src_ovals: List[Oval]) -> tuple[Point, float]:
         try:
-            src_distance = getOvalPointDistance(a=self.src_a, b=self.src_b, center=src_center, point=src_pivot)
+            # 代入橢圓公式，計算橢圓距離，區辨當前屬於第幾個 zone
+            elliptic_distance = src_ovals[0].getElliptic(point=src_pivot)
+
+            zone = 0
+            for zone in range(n_zone):
+                if elliptic_distance <= boundary_list[zone].src:
+                    break
 
             vector = Vector(src_center, src_pivot)
             distance = vector.getLength()
             radius = findRadius(src_center, src_pivot)
 
-            zone = 0
-            for zone in range(n_zone):
-                if src_distance <= boundary_list[zone].src:
-                    break
-
             if zone == 0:
                 src_inside_point = src_center
             else:
-                src_inside_point = findOvalIntersection(src_center, a_list[zone - 1].src, b_list[zone - 1].src, radius)
+                src_inside_point = src_ovals[zone - 1].getByRadius(radius=radius)
                 vector = Vector(src_inside_point, src_pivot)
                 distance = vector.getLength()
 
-            src_outside_point = findOvalIntersection(src_center, a_list[zone].src, b_list[zone].src, radius)
-            src_gap = computeDistance(src_inside_point, src_outside_point)
+            src_outside_point = src_ovals[zone].getByRadius(radius=radius)         
+            src_gap = src_inside_point.computeDistance(src_outside_point)
 
             distance /= src_gap
 
             if zone == 0:
                 dst_inside_point = dst_center
             else:
-                dst_inside_point = findOvalIntersection(dst_center, a_list[zone - 1].dst, b_list[zone - 1].dst, radius)
+                dst_inside_point = dst_ovals[zone - 1].getByRadius(radius=radius)
             
-            dst_outside_point = findOvalIntersection(dst_center, a_list[zone].dst, b_list[zone].dst, radius)
-            dst_gap = computeDistance(dst_inside_point, dst_outside_point)
+            dst_outside_point = dst_ovals[zone].getByRadius(radius=radius)
+            dst_gap = dst_inside_point.computeDistance(dst_outside_point)
 
             if dst_outside_point.x > 0:
                 if dst_outside_point.y > 0:
@@ -198,19 +202,19 @@ class OpenGaze:
             distance *= dst_gap
             
             # 取得單位向量
-            vector = getUnitVector(vector)
+            vector = vector.norm()
 
             # 單位向量向量乘以修正後的長度
             vector.multiply(distance)
 
-            # 取得投影後的目標點
-            point = modifyPoint(dst_inside_point, vector)
+            # 取得投影後的目標點            
+            point = dst_inside_point.translate(vector)
 
             dst_w = max(0, min(int(round(point.x)), self.dst_width - 1))
             dst_h = max(0, min(int(round(point.y)), self.dst_height - 1))
             pixel = Point(dst_w, dst_h)
-
-            w_distance = computeDistance(point, pixel)
+            
+            w_distance = point.computeDistance(pixel)
             weight = 1 / (w_distance + self.distance)
             return pixel, weight
         except ZeroDivisionError as zde:
@@ -282,14 +286,14 @@ class OpenGaze:
         values = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.float32)
         dst = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.uint8)
 
-        n_zone, a_list, b_list, boundary_list, distance_list = self.initOvalZone()
+        n_zone, boundary_list, dst_ovals, src_ovals = self.initOvalZone(dst_center, src_center)
         dst_h, dst_w = 0, 0
 
         try:
             for h in range(self.src_height):
                 for w in range(self.src_width):
                     pivot = Point(w, h)
-                    dst_point, weight = self.translateOval(src_center, dst_center, pivot, n_zone, a_list, b_list, boundary_list)
+                    dst_point, weight = self.translateOval(src_center, dst_center, pivot, n_zone, boundary_list, dst_ovals, src_ovals)
                     
                     dst_w = dst_point.x
                     dst_h = dst_point.y
