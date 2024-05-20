@@ -44,12 +44,13 @@ class OpenGaze:
 
         # 預設劃分成三個區段
         self.root_rate = math.sqrt(self.n_zone)
-        self.dst_a = self.dst_width / self.root_rate
-        self.dst_b = self.dst_height / self.root_rate
+        self.dst_a = self.dst_width / 2 / self.root_rate
+        self.dst_b = self.dst_height / 2 / self.root_rate
         self.src_a = None
         self.src_b = None
 
         self.coord = [0, 0, 0, 0]
+        self.zones = {}
 
         self.img = None
         self.src_height = 0
@@ -81,15 +82,15 @@ class OpenGaze:
         return self.n_zone, boundary_list, distance_list
 
     def initOvalZone(self, dst_center: Point, src_center: Point):
-        self.src_a = self.src_width / self.n_zone
-        self.src_b = self.src_height / self.n_zone
+        self.src_a = self.src_width / 2 / self.n_zone
+        self.src_b = self.src_height / 2 / self.n_zone
 
         boundary_list = [DstSrc(1, 1)]
         distance_list = [DstSrc(1, 1)]
         dst_ovals = [Oval(center=dst_center, a=self.dst_a, b=self.dst_b)]
         src_ovals = [Oval(center=src_center, a=self.src_a, b=self.src_b)]
         dst_boundary, src_boundary = 0, 0
-        n_zone = self.n_zone
+        n_zone = self.n_zone + 1
         
         for zone in range(1, n_zone):
             dst_boundary = zone + 1
@@ -153,7 +154,10 @@ class OpenGaze:
     
     # 將 src 座標轉換成 dst 座標
     def translateOval(self, src_center: Point, dst_center: Point, src_pivot: Point, n_zone: int, 
-                      boundary_list: List[DstSrc], dst_ovals: List[Oval], src_ovals: List[Oval]) -> tuple[Point, float]:
+                      boundary_list: List[DstSrc], dst_ovals: List[Oval], src_ovals: List[Oval]) -> tuple[int, Point, float]:
+        vector = Vector(src_center, src_pivot)
+        distance = vector.getLength()
+
         try:
             # 代入橢圓公式，計算橢圓距離，區辨當前屬於第幾個 zone
             elliptic_distance = src_ovals[0].getElliptic(point=src_pivot)
@@ -163,8 +167,11 @@ class OpenGaze:
                 if elliptic_distance <= boundary_list[zone].src:
                     break
 
-            vector = Vector(src_center, src_pivot)
-            distance = vector.getLength()
+            if not self.zones.__contains__(zone):
+                self.zones[zone] = 0
+
+            self.zones[zone] += 1
+
             radius = findRadius(src_center, src_pivot)
 
             if zone == 0:
@@ -216,12 +223,12 @@ class OpenGaze:
             
             w_distance = point.computeDistance(pixel)
             weight = 1 / (w_distance + self.distance)
-            return pixel, weight
+            return zone, pixel, weight
         except ZeroDivisionError as zde:
             print(f"division by zero, ZeroDivisionError: {zde}, zone: {zone}, src_center: {src_center}, src_pivot: {src_pivot}\nsrc_inside_point: {src_inside_point}, src_outside_point: {src_outside_point}")
         except Exception as e:
             print(f"translateOval Exception: {e}\nsrc_pivot: {src_pivot}, zone: {zone}, vector: {vector}, distance: {distance}")
-            return src_pivot, 1
+            return 0, src_pivot, 1
 
     # 輸出全壓縮圖像，即沒有注視哪一處，全局均勻壓縮
     def basic(self, img: cv2.typing.MatLike):
@@ -287,13 +294,17 @@ class OpenGaze:
         dst = np.zeros((self.dst_height, self.dst_width, self.channel), dtype=np.uint8)
 
         n_zone, boundary_list, dst_ovals, src_ovals = self.initOvalZone(dst_center, src_center)
+        # print(f"n_zone: {n_zone}")
+        # print(f"boundary_list: {boundary_list}")
+        # print(f"dst_ovals: {dst_ovals}")
+        # print(f"src_ovals: {src_ovals}")
         dst_h, dst_w = 0, 0
 
         try:
             for h in range(self.src_height):
                 for w in range(self.src_width):
                     pivot = Point(w, h)
-                    dst_point, weight = self.translateOval(src_center, dst_center, pivot, n_zone, boundary_list, dst_ovals, src_ovals)
+                    zone, dst_point, weight = self.translateOval(src_center, dst_center, pivot, n_zone, boundary_list, dst_ovals, src_ovals)
                     
                     dst_w = dst_point.x
                     dst_h = dst_point.y
@@ -302,10 +313,16 @@ class OpenGaze:
                     # if (45 <= w and w <= 50) and (45 <= h and h <= 50):
                     #     print(f"pivot: {pivot}, dst_point: {dst_point}, color: {color}")
 
+                    # if zone == 1:
+                    #     values[dst_h, dst_w] = np.array([255, 0, 0])
+                    #     weights[dst_h, dst_w] = 1
+                    # else:
+                    #     values[dst_h, dst_w] += color * weight
+                    #     weights[dst_h, dst_w] += weight
+
                     values[dst_h, dst_w] += color * weight
                     weights[dst_h, dst_w] += weight
 
-            # values /= weights
             values /= np.maximum(weights, 1)
 
             for h in range(self.dst_height):
@@ -317,4 +334,5 @@ class OpenGaze:
             print(f"dst_h: {dst_h}, dst_w: {dst_w}. values: {values.shape}, weights: {weights.shape}")
 
         print(f"coord: {self.coord}")
+        print(f"zones: {self.zones}")
         return dst

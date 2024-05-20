@@ -1,5 +1,6 @@
 import math
 from coordinate import Point
+from utils import findRadius, radiansToSlope
 
 
 class Oval:
@@ -19,18 +20,16 @@ class Oval:
     def getElliptic(self, point: Point) -> float:
         return ((point.x - self.center.x)**2 / self.a**2) + ((point.y - self.center.y)**2 / self.b**2)
     
-    def getByRadius(self, radius: float) -> Point:        
+    def getByRadius(self, radius: float) -> Point:
+        tan_radius = radiansToSlope(radius=radius)
+  
         # 處理斜率無窮大的情況
-        if math.isclose(radius % math.pi, math.pi / 2, rel_tol=1e-9):
-            # 直線方程為 x = h，解橢圓方程 ((h - h)^2) / a^2 + ((y - k)^2) / b^2 = 1
-            y1 = self.center.y + self.b
-            y2 = self.center.y - self.b
-            if 0 <= radius and radius < math.pi:
-                return Point(self.center.x, y1)
-            else:
-                return Point(self.center.x, y2)
-        
-        tan_radius = math.tan(radius)
+        if tan_radius == float('inf'):
+            return Point(self.center.x, self.center.y + self.b)
+
+        elif tan_radius == float('-inf'):
+            return Point(self.center.x, self.center.y - self.b)
+
         tan_radius2 = tan_radius**2
         # 橢圓方程：((x - h)^2) / a^2 + ((y - k)^2) / b^2 = 1
         # 直線方程：y - k = tan(radius) * (x - h)
@@ -57,7 +56,7 @@ class Oval:
         y2 = self.center.y + tan_radius * (x2 - self.center.x)
         
         # 選擇其中一個交點，我們選擇與 radius 同方向的交點
-        if radius >= 0 and radius < math.pi:
+        if (0 <= radius and radius <= math.pi / 2) or (1.5 * math.pi <= radius and radius <= 2 * math.pi):
             return Point(x1, y1)
         else:
             return Point(x2, y2)
@@ -117,21 +116,60 @@ if __name__ == '__main__':
     import numpy as np
     import matplotlib.pyplot as plt
 
-    oval = Oval(center=Point(0, 0), a=5, b=3)
+    center = Point(0, 0)
+    oval = Oval(center=center, a=5, b=3)
     print(f"Elliptic(5, 0): {oval.getElliptic(Point(5, 0))}")
     print(f"Elliptic(5, 0): {oval.getElliptic(Point(10, 0))}")
 
+    
+    theta = np.linspace(0, 2 * np.pi, 12)
+    radiuses = [math.tan(radius) for radius in theta]
+    print(f"radiuses: {radiuses}")
+
     num_points = 100
-    theta = np.linspace(0, 2 * np.pi, num_points)
+    theta = np.linspace(0, np.pi / 2, num_points)
+    x = []
+    y = []
+    for radius in theta:
+        point = oval.getByRadius(radius)
+
+        r = findRadius(center=center, point=point)
+        if math.fabs(math.fabs(radius) - math.fabs(r)) > 1e-7:
+            print(f"radius: {radius}, r: {r}")
+            
+        x.append(point.x)
+        y.append(point.y)
+    plt.scatter(x, y, c='r')
+
+    
+    theta = np.linspace(np.pi / 2, np.pi, num_points)
     x = []
     y = []
     for radius in theta:
         point = oval.getByRadius(radius)
         x.append(point.x)
         y.append(point.y)
+    plt.scatter(x, y, c='g')
 
-    # 绘制点
-    plt.scatter(x, y)
+    
+    theta = np.linspace(np.pi, 1.5 * np.pi, num_points)
+    x = []
+    y = []
+    for radius in theta:
+        point = oval.getByRadius(radius)
+        x.append(point.x)
+        y.append(point.y)
+    plt.scatter(x, y, c='blue')
+
+    
+    theta = np.linspace(1.5 * np.pi, 2 * np.pi, num_points)
+    x = []
+    y = []
+    for radius in theta:
+        point = oval.getByRadius(radius)
+        x.append(point.x)
+        y.append(point.y)
+    plt.scatter(x, y, c='black')
 
     # 添加图形标题和坐标轴标签
     plt.title('Scatter Plot of sin(theta)')
@@ -140,4 +178,5 @@ if __name__ == '__main__':
 
     # 显示图形
     plt.show()
+
     

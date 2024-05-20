@@ -47,4 +47,14 @@ def findRadius(center: Point, point: Point) -> float:
     delta_x = point.x - center.x
     delta_y = point.y - center.y
     angle = math.atan2(delta_y, delta_x)
+    if angle < 0:
+        angle += 2 * math.pi
     return angle
+
+
+def radiansToSlope(radius: float) -> float:
+    """將弧度轉換為斜率"""
+    if math.isclose(radius % math.pi, math.pi / 2):
+        # 處理斜率無窮大的情況
+        return float('inf') if radius % (2 * math.pi) < math.pi else float('-inf')
+    return math.tan(radius)

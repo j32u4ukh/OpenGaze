@@ -32,10 +32,12 @@ print(f"basic_img.shape: {basic_img.shape}")
 # print(f"weight: {weight}")
 
 
-dst = og.gazeOval(0.5, 0.5)
+gaze_x = 0.5
+gaze_y = 0.5
+dst = og.gazeOval(gaze_x, gaze_y)
 print(f"dst.shape: {dst.shape}")
 
-file_name = f"./data/gazeoval-({height}, {width})-{n_zone}.png"
+file_name = f"./data/gazeoval-({height}, {width})-({int(gaze_x * 100)}, {int(gaze_y * 100)}).png"
 cv2.imwrite(file_name, dst)
 print(f"Save as {file_name}")
 # cv2.imshow("PON", dst)
